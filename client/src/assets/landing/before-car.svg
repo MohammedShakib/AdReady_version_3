@@ -1,0 +1,30 @@
+<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="640" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14191F"/>
+      <stop offset="1" stop-color="#262D37"/>
+    </linearGradient>
+    <linearGradient id="car" x1="180" y1="160" x2="450" y2="260" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1DDECB"/>
+      <stop offset="1" stop-color="#0A8780"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" rx="22" fill="url(#bg)"/>
+  <rect x="0" y="220" width="640" height="140" fill="#10161D"/>
+  <path d="M40 248H600" stroke="#405061" stroke-width="2" stroke-dasharray="8 8"/>
+  <rect x="500" y="80" width="90" height="52" rx="8" fill="#2C3440"/>
+  <rect x="64" y="96" width="120" height="70" rx="8" fill="#2A3340"/>
+  <path d="M178 222C197 181 231 160 291 160H387C414 160 440 179 458 212L470 233H165L178 222Z" fill="url(#car)"/>
+  <path d="M210 191C218 176 232 169 255 169H332C350 169 365 179 376 193L383 202H204L210 191Z" fill="#C4FBF6" fill-opacity="0.35"/>
+  <circle cx="224" cy="235" r="29" fill="#0E1218"/>
+  <circle cx="224" cy="235" r="13" fill="#5C6A77"/>
+  <circle cx="405" cy="235" r="29" fill="#0E1218"/>
+  <circle cx="405" cy="235" r="13" fill="#5C6A77"/>
+  <g opacity="0.5">
+    <circle cx="108" cy="248" r="2" fill="#1DDECB"/>
+    <circle cx="126" cy="248" r="2" fill="#1DDECB"/>
+    <circle cx="144" cy="248" r="2" fill="#1DDECB"/>
+  </g>
+  <rect x="18" y="18" width="144" height="30" rx="10" fill="#0D1318" stroke="#22313C"/>
+  <text x="30" y="38" fill="#9FB4C3" font-size="15" font-family="Inter, Arial, sans-serif">Street Capture</text>
+</svg>

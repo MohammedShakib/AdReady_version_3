@@ -1,0 +1,12 @@
+{
+  "name": "adready-agent",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "build": "npm ci --prefix server && npm ci --prefix client --include=dev && npm run build --prefix client",
+    "start": "npm start --prefix server"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

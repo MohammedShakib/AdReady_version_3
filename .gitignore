@@ -1,0 +1,23 @@
+# Environment files
+.env
+.env.*
+!*.env.example
+!**/.env.example
+
+# Build outputs and bundles
+**/dist/
+*.zip
+**/node_modules/
+generated-videos/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

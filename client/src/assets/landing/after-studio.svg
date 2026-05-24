@@ -1,0 +1,29 @@
+<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="studio" x1="0" y1="0" x2="640" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111821"/>
+      <stop offset="1" stop-color="#131F2A"/>
+    </linearGradient>
+    <radialGradient id="spot" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(320 170) rotate(90) scale(138 300)">
+      <stop stop-color="#D3FFFA" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#D3FFFA" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="car" x1="182" y1="164" x2="448" y2="255" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A5FFF6"/>
+      <stop offset="1" stop-color="#2CC2B8"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" rx="22" fill="url(#studio)"/>
+  <rect x="0" y="216" width="640" height="144" fill="#0D151D"/>
+  <ellipse cx="320" cy="252" rx="230" ry="35" fill="#0B1118"/>
+  <ellipse cx="320" cy="168" rx="300" ry="140" fill="url(#spot)"/>
+  <path d="M180 220C199 180 232 164 288 164H384C411 164 436 181 455 211L467 232H168L180 220Z" fill="url(#car)"/>
+  <path d="M209 193C217 178 231 171 254 171H330C349 171 364 180 374 194L381 203H203L209 193Z" fill="#EFFFFD" fill-opacity="0.48"/>
+  <circle cx="226" cy="234" r="28" fill="#0A1017"/>
+  <circle cx="226" cy="234" r="12" fill="#6D8597"/>
+  <circle cx="403" cy="234" r="28" fill="#0A1017"/>
+  <circle cx="403" cy="234" r="12" fill="#6D8597"/>
+  <rect x="20" y="18" width="174" height="30" rx="10" fill="#0B131B" stroke="#2A404B"/>
+  <text x="34" y="38" fill="#A6C2D6" font-size="15" font-family="Inter, Arial, sans-serif">Studio Isolated Output</text>
+  <path d="M20 298H620" stroke="#1E2E3A"/>
+</svg>
