@@ -2638,6 +2638,19 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+app.get('/api/debug', async (req, res) => {
+  const result = { db_url_set: Boolean(DATABASE_URL), ssl: PG_SSL_ENABLED };
+  try {
+    const r = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' LIMIT 10`);
+    result.db_connected = true;
+    result.tables = r.rows.map((x) => x.table_name);
+  } catch (error) {
+    result.db_connected = false;
+    result.db_error = error.message;
+  }
+  return res.json(result);
+});
+
 app.post('/api/auth/signup', async (req, res) => {
   const username = String(req.body?.username || '').trim();
   const emailRaw = String(req.body?.email || '').trim();
