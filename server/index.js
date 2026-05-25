@@ -16210,11 +16210,17 @@ const shutdown = async (signal) => {
   }
 };
 
-process.once('SIGINT', () => void shutdown('SIGINT'));
-process.once('SIGTERM', () => void shutdown('SIGTERM'));
+if (require.main === module) {
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
-startServer().catch((error) => {
-  console.error('Server startup failed:', error.message);
-  process.exit(1);
-});
+  startServer().catch((error) => {
+    console.error('Server startup failed:', error.message);
+    process.exit(1);
+  });
+}
+
+module.exports = app;
+module.exports.startServer = startServer;
+module.exports.shutdown = shutdown;
 

@@ -67,7 +67,7 @@ export default function Login() {
       }
       if (!data?.token || !data?.user) {
         throw new Error(
-          'Auth response missing token. Set VITE_API_BASE_URL to your Railway server domain and redeploy client.'
+          'Auth response missing token. Verify your Vercel API routes or set VITE_API_BASE_URL only if the API is hosted separately.'
         );
       }
 

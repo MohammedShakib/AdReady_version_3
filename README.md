@@ -8,7 +8,7 @@ AdReady is a full-stack ad creation platform with a React/Vite frontend and an E
 - `server/` - Express API, payment webhooks, Telegram bot logic, and Remotion rendering
 - `shared/` - Shared prompt-building helpers used by client/server logic
 - `supabase/` - Database migrations and Supabase configuration
-- `docs/` - Setup notes for Supabase and Railway
+- `docs/` - Setup notes for Supabase and Vercel
 
 ## Prerequisites
 
@@ -79,7 +79,7 @@ This starts the Express server.
 ## Deployment notes
 
 - Supabase migration and schema notes: [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)
-- Railway build and runtime notes: [docs/RAILWAY_SETUP.md](docs/RAILWAY_SETUP.md)
+- Vercel build and runtime notes: [docs/VERCEL_SETUP.md](docs/VERCEL_SETUP.md)
 - The server exposes `/api/health` for health checks
 - Static frontend assets are served from `client/dist`
 
