@@ -10,11 +10,11 @@ Use the existing root build command:
 npm run build
 ```
 
-The client is built into `client/dist`.
+The client is built into `client/dist` during build and copied to root `dist/` for Vercel output.
 
 ## Runtime
 
-- Frontend is served statically from `client/dist`
+- Frontend is served statically from root `dist/` on Vercel
 - API routes are exposed from the `api/` directory
 - `/api/auth/login`, `/api/auth/signup`, and the other Express routes are handled by the shared server app
 

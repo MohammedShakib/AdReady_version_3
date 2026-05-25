@@ -58,7 +58,7 @@ npm run dev --prefix client
 npm run dev --prefix server
 ```
 
-The client uses Vite during development. The server serves the built frontend from `client/dist` when deployed.
+The client uses Vite during development. The server serves the built frontend from `client/dist` locally and from root `dist/` on Vercel.
 
 ## Build
 
@@ -81,7 +81,7 @@ This starts the Express server.
 - Supabase migration and schema notes: [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)
 - Vercel build and runtime notes: [docs/VERCEL_SETUP.md](docs/VERCEL_SETUP.md)
 - The server exposes `/api/health` for health checks
-- Static frontend assets are served from `client/dist`
+- Static frontend assets are served from `client/dist` locally and root `dist/` on Vercel
 
 ## License
 

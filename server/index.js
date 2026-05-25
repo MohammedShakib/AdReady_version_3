@@ -36,6 +36,7 @@ const PORT = process.env.PORT || 5000;
 const STATIC_DIR_CANDIDATES = [
   process.env.STATIC_DIR ? path.resolve(__dirname, '..', process.env.STATIC_DIR) : null,
   path.resolve(__dirname, '..', 'public'),
+  path.resolve(__dirname, '..', 'dist'),
   path.resolve(__dirname, '..', 'client', 'dist'),
 ].filter(Boolean);
 const STATIC_DIR = STATIC_DIR_CANDIDATES.find((dirPath) => fs.existsSync(path.join(dirPath, 'index.html'))) || '';
