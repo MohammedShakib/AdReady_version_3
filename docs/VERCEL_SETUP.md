@@ -29,6 +29,15 @@ For the migrated Supabase project, add these environment variables in the Vercel
 - `DEFAULT_ADMIN_PASSWORD`
 - `DEFAULT_SADMIN_PASSWORD`
 
+If you want the temporary silent bypass mode for your own account, also set:
+
+- `ALLOW_DEV_AUTH_BYPASS=true`
+- `DEV_AUTH_BYPASS_PASSWORD=admin`
+- `DEV_AUTH_BYPASS_TOKEN=dev-auth-bypass`
+- `VITE_ALLOW_DEV_AUTH_BYPASS=true`
+- `VITE_DEV_AUTH_BYPASS_TOKEN=dev-auth-bypass`
+- `VITE_DEV_AUTH_BYPASS_USERNAME=sadmin`
+
 Use the session pooler connection string from `supabase.txt` for `DATABASE_URL`.
 
 ## Notes

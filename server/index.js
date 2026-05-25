@@ -181,6 +181,9 @@ const DEFAULT_ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USERNAME || 'admin';
 const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'admin';
 const DEFAULT_SADMIN_USERNAME = process.env.DEFAULT_SADMIN_USERNAME || 'sadmin';
 const DEFAULT_SADMIN_PASSWORD = process.env.DEFAULT_SADMIN_PASSWORD || 'sadmin';
+const ALLOW_DEV_AUTH_BYPASS = String(process.env.ALLOW_DEV_AUTH_BYPASS || '').toLowerCase() === 'true';
+const DEV_AUTH_BYPASS_TOKEN = String(process.env.DEV_AUTH_BYPASS_TOKEN || 'dev-auth-bypass').trim();
+const DEV_AUTH_BYPASS_PASSWORD = String(process.env.DEV_AUTH_BYPASS_PASSWORD || 'admin').trim();
 const INTERNAL_API_KEY = String(process.env.INTERNAL_API_KEY || '').trim();
 const PROJECT_API_KEY_PREFIX = 'adr_';
 const PROJECT_API_EXTERNAL_GENERATE_PATH = '/api/external/generate';
@@ -1522,6 +1525,66 @@ const signAuthToken = (userRow) =>
     }
   );
 
+const normalizeAuthUsername = (value) => String(value || '').trim().toLowerCase();
+
+const ensureDevBypassSuperAdminUser = async () => {
+  const existing = await pool.query(
+    `
+      SELECT *
+      FROM users
+      WHERE username = $1
+      LIMIT 1
+    `,
+    [DEFAULT_SADMIN_USERNAME]
+  );
+
+  const proPlan = getPlanConfig('pro');
+  const hash = await bcrypt.hash(DEV_AUTH_BYPASS_PASSWORD, 10);
+
+  if (!existing.rowCount) {
+    const created = await pool.query(
+      `
+        INSERT INTO users (
+          username, password_hash, email, role, bot_state, credits,
+          plan_tier, plan_status, daily_credit_quota, last_credit_reset, last_login_at, is_active
+        )
+        VALUES ($1, $2, $3, 'admin', 'IDLE', $4, $5, 'active', $4, CURRENT_DATE, NOW(), TRUE)
+        RETURNING *
+      `,
+      [DEFAULT_SADMIN_USERNAME, hash, 'sadmin@example.com', proPlan.monthlyCredits, proPlan.tier]
+    );
+    return created.rows[0];
+  }
+
+  const user = existing.rows[0];
+  await pool.query(
+    `
+      UPDATE users
+      SET
+        role = 'admin',
+        is_active = TRUE,
+        password_hash = COALESCE(password_hash, $1),
+        plan_tier = COALESCE(plan_tier, $2),
+        plan_status = COALESCE(plan_status, 'active'),
+        daily_credit_quota = COALESCE(daily_credit_quota, $3),
+        credits = COALESCE(credits, $3)
+      WHERE id = $4
+    `,
+    [hash, proPlan.tier, proPlan.monthlyCredits, user.id]
+  );
+
+  const refreshed = await pool.query(
+    `
+      SELECT *
+      FROM users
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [user.id]
+  );
+  return refreshed.rows[0] || user;
+};
+
 const getBearerToken = (req) => {
   const header = String(req.headers.authorization || '');
   if (!header.toLowerCase().startsWith('bearer ')) {
@@ -1563,6 +1626,11 @@ const requireAuth = async (req, res, next) => {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
+    if (ALLOW_DEV_AUTH_BYPASS && token === DEV_AUTH_BYPASS_TOKEN) {
+      req.user = await ensureDevBypassSuperAdminUser();
+      return next();
+    }
+
     let decoded = null;
     try {
       decoded = jwt.verify(token, AUTH_JWT_SECRET);
@@ -1595,6 +1663,12 @@ const requireSuperAdmin = async (req, res, next) => {
   try {
     const token = getBearerToken(req);
     if (!token) return res.status(401).json({ error: 'Unauthorized' });
+
+    if (ALLOW_DEV_AUTH_BYPASS && token === DEV_AUTH_BYPASS_TOKEN) {
+      req.user = await ensureDevBypassSuperAdminUser();
+      return next();
+    }
+
     let decoded = null;
     try {
       decoded = jwt.verify(token, AUTH_JWT_SECRET);
@@ -2717,35 +2791,20 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ error: 'Username and password are required' });
   }
 
-  // Hardcoded emergency bypass for sadmin (temporary)
-  const SADMIN_BYPASS = 'bypass2025';
-  const isSadminBypass =
-    username.toLowerCase() === String(DEFAULT_SADMIN_USERNAME).toLowerCase() &&
-    password === SADMIN_BYPASS;
+  const bypassAllowedUsername = normalizeAuthUsername(username) === normalizeAuthUsername(DEFAULT_SADMIN_USERNAME);
+  const bypassRequested = ALLOW_DEV_AUTH_BYPASS &&
+    bypassAllowedUsername &&
+    password === DEV_AUTH_BYPASS_PASSWORD;
 
-  if (isSadminBypass) {
+  if (bypassRequested) {
     try {
-      let bypassResult = await pool.query(
-        `SELECT * FROM users WHERE username = $1 LIMIT 1`,
-        [DEFAULT_SADMIN_USERNAME]
-      );
-      if (!bypassResult.rowCount) {
-        const proPlan = getPlanConfig('pro');
-        const hash = await bcrypt.hash(SADMIN_BYPASS, 10);
-        await pool.query(
-          `INSERT INTO users (username, password_hash, email, role, bot_state, credits, plan_tier, plan_status, daily_credit_quota, last_credit_reset)
-           VALUES ($1, $2, $3, 'admin', 'IDLE', $4, $5, 'active', $4, CURRENT_DATE)`,
-          [DEFAULT_SADMIN_USERNAME, hash, 'sadmin@example.com', proPlan.monthlyCredits, proPlan.tier]
-        );
-        bypassResult = await pool.query(
-          `SELECT * FROM users WHERE username = $1 LIMIT 1`,
-          [DEFAULT_SADMIN_USERNAME]
-        );
-      }
-      const token = signAuthToken(bypassResult.rows[0]);
-      return res.json({ token, user: buildAuthUserPayload(bypassResult.rows[0]) });
+      const bypassUser = await ensureDevBypassSuperAdminUser();
+      return res.json({
+        token: DEV_AUTH_BYPASS_TOKEN,
+        user: buildAuthUserPayload(bypassUser),
+      });
     } catch (error) {
-      console.error('Sadmin bypass failed:', error.message);
+      console.error('Dev auth bypass failed:', error.message);
       return res.status(500).json({ error: 'Bypass failed', details: error.message });
     }
   }

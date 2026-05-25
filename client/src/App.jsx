@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
@@ -6,12 +6,29 @@ import Dashboard from './pages/Dashboard';
 import SuperAdminDashboard from './pages/SuperAdminDashboard';
 import './App.css';
 
+const DEV_AUTH_BYPASS_ENABLED = String(import.meta.env.VITE_ALLOW_DEV_AUTH_BYPASS || '').toLowerCase() === 'true';
+const DEV_AUTH_BYPASS_TOKEN = String(import.meta.env.VITE_DEV_AUTH_BYPASS_TOKEN || 'dev-auth-bypass').trim();
+const DEV_AUTH_BYPASS_USERNAME = String(import.meta.env.VITE_DEV_AUTH_BYPASS_USERNAME || 'sadmin').trim();
+
 const isSuperAdminSession = () => {
   const marker = localStorage.getItem('isSuperAdmin');
   if (marker === 'true') return true;
   if (marker === 'false') return false;
   const username = String(localStorage.getItem('username') || '').toLowerCase();
   return username === 'sadmin';
+};
+
+const DevAuthBootstrap = () => {
+  useEffect(() => {
+    if (!DEV_AUTH_BYPASS_ENABLED) return;
+    localStorage.setItem('authToken', DEV_AUTH_BYPASS_TOKEN);
+    localStorage.setItem('username', DEV_AUTH_BYPASS_USERNAME);
+    localStorage.setItem('userId', 'dev-bypass');
+    localStorage.setItem('userRole', 'admin');
+    localStorage.setItem('isSuperAdmin', 'true');
+  }, []);
+
+  return null;
 };
 
 // Simple PrivateRoute wrapper
@@ -44,9 +61,16 @@ const AdminRoute = ({ children }) => {
 function App() {
   return (
     <Router>
+      <DevAuthBootstrap />
       <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
+        <Route
+          path="/"
+          element={DEV_AUTH_BYPASS_ENABLED ? <Navigate to="/admin" replace /> : <LandingPage />}
+        />
+        <Route
+          path="/login"
+          element={DEV_AUTH_BYPASS_ENABLED ? <Navigate to="/admin" replace /> : <Login />}
+        />
         <Route 
           path="/dashboard" 
           element={

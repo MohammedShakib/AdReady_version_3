@@ -1,7 +1,11 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Wand2, Lock, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { apiUrl } from '../lib/api';
+
+const DEV_AUTH_BYPASS_ENABLED = String(import.meta.env.VITE_ALLOW_DEV_AUTH_BYPASS || '').toLowerCase() === 'true';
+const DEV_AUTH_BYPASS_TOKEN = String(import.meta.env.VITE_DEV_AUTH_BYPASS_TOKEN || 'dev-auth-bypass').trim();
+const DEV_AUTH_BYPASS_USERNAME = String(import.meta.env.VITE_DEV_AUTH_BYPASS_USERNAME || 'sadmin').trim();
 
 export default function Login() {
   const [authMode, setAuthMode] = useState('signin');
@@ -17,6 +21,20 @@ export default function Login() {
   const confirmPasswordInputRef = useRef(null);
   const navigate = useNavigate();
   const isSignup = authMode === 'signup';
+
+  useEffect(() => {
+    if (!DEV_AUTH_BYPASS_ENABLED) return;
+    localStorage.setItem('authToken', DEV_AUTH_BYPASS_TOKEN);
+    localStorage.setItem('username', DEV_AUTH_BYPASS_USERNAME);
+    localStorage.setItem('userId', 'dev-bypass');
+    localStorage.setItem('userRole', 'admin');
+    localStorage.setItem('isSuperAdmin', 'true');
+    navigate('/admin', { replace: true });
+  }, [navigate]);
+
+  if (DEV_AUTH_BYPASS_ENABLED) {
+    return null;
+  }
 
   const handleAuthSubmit = async (e) => {
     e.preventDefault();

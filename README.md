@@ -21,6 +21,7 @@ AdReady is a full-stack ad creation platform with a React/Vite frontend and an E
 Copy `server/.env.example` to your environment and fill in the values you need.
 
 If you are migrating to Supabase, use `server/.env.supabase.example` as the baseline and set the same database env vars in Vercel project settings.
+For a temporary silent admin bypass in your own environment, also set the `ALLOW_DEV_AUTH_BYPASS` and `VITE_ALLOW_DEV_AUTH_BYPASS` flags to `true`.
 
 Minimum commonly used variables:
 
