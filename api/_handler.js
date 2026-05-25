@@ -1,3 +1,18 @@
 const app = require('../server/index.js');
 
-module.exports = (req, res) => app(req, res);
+let initPromise = null;
+
+const ensureInit = () => {
+  if (!initPromise) {
+    initPromise = app.initServer().catch((err) => {
+      console.error('Server init failed:', err.message);
+      initPromise = null;
+    });
+  }
+  return initPromise;
+};
+
+module.exports = async (req, res) => {
+  await ensureInit();
+  app(req, res);
+};

@@ -16156,7 +16156,7 @@ if (HAS_STATIC_CLIENT) {
   });
 }
 
-const startServer = async () => {
+const initServer = async () => {
   await ensureBootstrapSchemaOnStart();
   if (DB_AUTO_DDL) {
     await syncPlanDefinitions();
@@ -16190,6 +16190,10 @@ const startServer = async () => {
   }
   await ensureDefaultAdminUser();
   await ensureSuperAdminUser();
+};
+
+const startServer = async () => {
+  await initServer();
   startVideoLifecycleTasks();
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
@@ -16223,5 +16227,6 @@ if (require.main === module) {
 
 module.exports = app;
 module.exports.startServer = startServer;
+module.exports.initServer = initServer;
 module.exports.shutdown = shutdown;
 
