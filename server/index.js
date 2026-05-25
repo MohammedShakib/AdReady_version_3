@@ -63,7 +63,7 @@ app.use(express.json({
   },
 }));
 
-fs.mkdirSync(VIDEO_OUTPUT_DIR, { recursive: true });
+try { fs.mkdirSync(VIDEO_OUTPUT_DIR, { recursive: true }); } catch (_) {}
 app.use('/generated-videos', express.static(VIDEO_OUTPUT_DIR));
 
 if (HAS_STATIC_CLIENT) {
