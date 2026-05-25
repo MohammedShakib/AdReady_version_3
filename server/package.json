@@ -14,7 +14,6 @@
   "dependencies": {
     "@remotion/bundler": "^4.0.366",
     "@remotion/renderer": "^4.0.366",
-    "adready-agent": "file:..",
     "axios": "^1.13.4",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
