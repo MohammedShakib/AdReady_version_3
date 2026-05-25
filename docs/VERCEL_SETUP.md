@@ -18,6 +18,19 @@ The client is built into `client/dist` during build and copied to root `dist/` f
 - API routes are exposed from the `api/` directory
 - `/api/auth/login`, `/api/auth/signup`, and the other Express routes are handled by the shared server app
 
+## Supabase env
+
+For the migrated Supabase project, add these environment variables in the Vercel project settings:
+
+- `DATABASE_URL`
+- `PGSSLMODE=true`
+- `DB_AUTO_DDL=false`
+- `JWT_SECRET`
+- `DEFAULT_ADMIN_PASSWORD`
+- `DEFAULT_SADMIN_PASSWORD`
+
+Use the session pooler connection string from `supabase.txt` for `DATABASE_URL`.
+
 ## Notes
 
 - The server entrypoint only starts `listen()` when run directly.

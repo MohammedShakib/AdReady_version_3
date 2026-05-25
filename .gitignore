@@ -3,6 +3,7 @@
 .env.*
 !*.env.example
 !**/.env.example
+supabase.txt
 
 # Build outputs and bundles
 **/dist/
