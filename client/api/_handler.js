@@ -1,4 +1,4 @@
-const app = require('../server/index.js');
+const app = require('../../server/index.js');
 
 let initPromise = null;
 
