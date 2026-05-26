@@ -3787,11 +3787,7 @@ app.put('/api/admin/connections/:provider', requireSuperAdmin, async (req, res) 
       if (IS_SERVERLESS_RUNTIME && requestedTelegramMode === 'polling') {
         runtimeNotes.push('Serverless runtime detected: Telegram mode was automatically set to webhook.');
       }
-      // Restart Telegram runtime in background so admin save API does not hang
-      // when bot launch/polling takes too long.
-      startTelegramRuntime({ restart: true }).catch((runtimeError) => {
-        console.error('Telegram runtime restart failed after saving settings:', runtimeError);
-      });
+      await startTelegramRuntime({ restart: true, configureWebhook: true });
     }
 
     return res.json({
@@ -12768,7 +12764,7 @@ const stopTelegramRuntime = async (reason = 'runtime-restart') => {
   telegramBot = null;
 };
 
-const startTelegramRuntime = async ({ restart = false } = {}) => {
+const startTelegramRuntime = async ({ restart = false, configureWebhook = true } = {}) => {
   const botToken = String(process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '').trim();
   if (!botToken) {
     if (telegramBot) {
@@ -12804,11 +12800,11 @@ const startTelegramRuntime = async ({ restart = false } = {}) => {
     ensureTelegramWebhookRoute(webhookPath);
 
     const publicServerUrl = String(process.env.PUBLIC_SERVER_URL || '').trim();
-    if (publicServerUrl) {
+    if (publicServerUrl && configureWebhook) {
       const webhookUrl = `${publicServerUrl.replace(/\/$/, '')}${webhookPath}`;
       await telegramBot.telegram.setWebhook(webhookUrl);
       console.log(`Telegram webhook configured: ${webhookUrl}`);
-    } else {
+    } else if (!publicServerUrl) {
       console.warn('TELEGRAM_MODE=webhook but PUBLIC_SERVER_URL is missing; webhook URL was not registered.');
     }
 
@@ -16552,5 +16548,6 @@ if (require.main === module) {
 module.exports = app;
 module.exports.startServer = startServer;
 module.exports.initServer = initServer;
+module.exports.startTelegramRuntime = startTelegramRuntime;
 module.exports.shutdown = shutdown;
 
