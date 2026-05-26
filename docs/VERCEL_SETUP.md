@@ -44,5 +44,7 @@ Use the session pooler connection string from `supabase.txt` for `DATABASE_URL`.
 
 - The server entrypoint only starts `listen()` when run directly.
 - Vercel should not be used for long-running polling workers.
-- Telegram polling should be replaced with webhook mode if you want it fully on Vercel.
+- Telegram on Vercel must run in webhook mode (`TELEGRAM_MODE=webhook`).
+- Use `TELEGRAM_WEBHOOK_PATH=/api/webhook` on Vercel (not `/webhook`).
+- Stripe webhook endpoint on Vercel should be `https://<your-domain>/api/webhook/payment`.
 - Heavy background rendering is still a candidate for a separate worker if function duration becomes an issue.

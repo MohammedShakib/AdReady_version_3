@@ -448,7 +448,13 @@ export default function SuperAdminDashboard() {
           Authorization: `Bearer ${authToken}`,
         },
       });
-      const payload = await response.json().catch(() => ({}));
+      const rawText = await response.text();
+      let payload = {};
+      try {
+        payload = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        payload = {};
+      }
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
           localStorage.removeItem('authToken');
@@ -458,7 +464,11 @@ export default function SuperAdminDashboard() {
           localStorage.removeItem('isSuperAdmin');
           navigate('/login', { replace: true });
         }
-        throw new Error(payload?.error || payload?.details || 'Request failed');
+        const statusText = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+        const rawSnippet = rawText
+          ? rawText.replace(/\s+/g, ' ').trim().slice(0, 180)
+          : '';
+        throw new Error(payload?.error || payload?.details || rawSnippet || statusText || 'Request failed');
       }
       return payload;
     },

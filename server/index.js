@@ -52,12 +52,35 @@ const VIDEO_POLLABLE_STATUS = new Set(['queued', 'rendering', 'completed', 'fail
 const videoRenderJobs = new Map();
 let videoCleanupIntervalHandle = null;
 let videoJobPruneIntervalHandle = null;
+const IS_VERCEL_RUNTIME = String(process.env.VERCEL || '').trim() === '1';
+const IS_SERVERLESS_RUNTIME =
+  IS_VERCEL_RUNTIME ||
+  Boolean(String(process.env.AWS_LAMBDA_FUNCTION_NAME || '').trim()) ||
+  String(process.env.NODE_ENV || '').trim().toLowerCase() === 'serverless';
+const PAYMENT_WEBHOOK_PATHS = new Set(['/webhook/payment', '/api/webhook/payment']);
+const normalizeRoutePath = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '/';
+  const withoutQuery = raw.split('?')[0].trim();
+  return withoutQuery.startsWith('/') ? withoutQuery : `/${withoutQuery}`;
+};
+const isPaymentWebhookRequestPath = (req) =>
+  PAYMENT_WEBHOOK_PATHS.has(normalizeRoutePath(req?.originalUrl || req?.url || ''));
+const normalizeWebhookPath = (pathValue) => {
+  const defaultPath = '/webhook';
+  const normalizedRaw = normalizeRoutePath(pathValue || defaultPath);
+  const withoutDuplicateApiPrefix = normalizedRaw.replace(/^\/api(?=\/)/i, '');
+  if (!IS_SERVERLESS_RUNTIME) {
+    return withoutDuplicateApiPrefix || defaultPath;
+  }
+  return normalizeRoutePath(`/api${withoutDuplicateApiPrefix || defaultPath}`);
+};
 
 app.use(cors());
 app.use(express.json({
   limit: '50mb',
   verify: (req, res, buf) => {
-    if (req.originalUrl === '/webhook/payment') {
+    if (isPaymentWebhookRequestPath(req)) {
       req.rawBody = buf;
     }
   },
@@ -838,11 +861,13 @@ const CONNECTION_CONFIG_KEYS = {
 
 const buildDefaultConnectionConfig = (provider) => {
   if (provider === 'telegram') {
+    const defaultMode = IS_SERVERLESS_RUNTIME ? 'webhook' : 'polling';
+    const configuredMode = String(process.env.TELEGRAM_MODE || defaultMode).trim().toLowerCase();
     return {
       bot_username: String(process.env.TELEGRAM_BOT_USERNAME || '').trim(),
       bot_token: String(process.env.BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '').trim(),
-      mode: String(process.env.TELEGRAM_MODE || 'polling').trim() || 'polling',
-      webhook_path: String(process.env.TELEGRAM_WEBHOOK_PATH || '/webhook').trim() || '/webhook',
+      mode: IS_SERVERLESS_RUNTIME ? 'webhook' : (configuredMode === 'webhook' ? 'webhook' : 'polling'),
+      webhook_path: normalizeWebhookPath(process.env.TELEGRAM_WEBHOOK_PATH || '/webhook'),
       public_server_url: String(process.env.PUBLIC_SERVER_URL || '').trim(),
     };
   }
@@ -907,6 +932,14 @@ const sanitizeConnectionConfig = (provider, input) => {
     if (Object.prototype.hasOwnProperty.call(source, key)) {
       output[key] = String(source[key] ?? '').trim();
     }
+  }
+  if (provider === 'telegram') {
+    const rawMode = String(output.mode || '').trim().toLowerCase();
+    output.mode = rawMode === 'webhook' ? 'webhook' : 'polling';
+    if (IS_SERVERLESS_RUNTIME) {
+      output.mode = 'webhook';
+    }
+    output.webhook_path = normalizeWebhookPath(output.webhook_path || '/webhook');
   }
   return output;
 };
@@ -974,11 +1007,15 @@ const applyConnectionRuntimeEnv = (provider, row) => {
 
   if (provider === 'telegram') {
     const token = isEnabled ? String(config.bot_token || '').trim() : '';
+    const requestedMode = String(config.mode || 'polling').trim().toLowerCase();
+    const resolvedMode = requestedMode === 'webhook'
+      ? 'webhook'
+      : (IS_SERVERLESS_RUNTIME ? 'webhook' : 'polling');
     process.env.BOT_TOKEN = token;
     process.env.TELEGRAM_BOT_TOKEN = token;
     process.env.TELEGRAM_BOT_USERNAME = String(config.bot_username || '').trim();
-    process.env.TELEGRAM_MODE = String(config.mode || 'polling').trim() || 'polling';
-    process.env.TELEGRAM_WEBHOOK_PATH = String(config.webhook_path || '/webhook').trim() || '/webhook';
+    process.env.TELEGRAM_MODE = resolvedMode;
+    process.env.TELEGRAM_WEBHOOK_PATH = normalizeWebhookPath(config.webhook_path || '/webhook');
     process.env.PUBLIC_SERVER_URL = String(config.public_server_url || '').trim();
     return;
   }
@@ -3061,6 +3098,75 @@ app.get('/api/admin/stats', requireSuperAdmin, async (req, res) => {
   }
 });
 
+app.get('/api/admin/system/diagnostics', requireSuperAdmin, async (req, res) => {
+  const diagnostics = {
+    runtime: {
+      isVercelRuntime: IS_VERCEL_RUNTIME,
+      isServerlessRuntime: IS_SERVERLESS_RUNTIME,
+      telegramModeConfigured: String(process.env.TELEGRAM_MODE || 'polling').toLowerCase(),
+      telegramWebhookPath: normalizeWebhookPath(process.env.TELEGRAM_WEBHOOK_PATH || '/webhook'),
+      paymentWebhookPaths: Array.from(PAYMENT_WEBHOOK_PATHS),
+    },
+    database: {
+      connected: false,
+      missingTables: [],
+      tables: {},
+    },
+  };
+
+  try {
+    await pool.query('SELECT 1');
+    diagnostics.database.connected = true;
+
+    const tableProbe = await pool.query(
+      `
+        SELECT
+          to_regclass('public.users') AS users,
+          to_regclass('public.plan_settings') AS plan_settings,
+          to_regclass('public.integration_settings') AS integration_settings,
+          to_regclass('public.projects') AS projects,
+          to_regclass('public.project_api_keys') AS project_api_keys
+      `
+    );
+    const tableRow = tableProbe.rows[0] || {};
+    for (const [key, value] of Object.entries(tableRow)) {
+      const exists = Boolean(value);
+      diagnostics.database.tables[key] = exists;
+      if (!exists) diagnostics.database.missingTables.push(key);
+    }
+
+    if (diagnostics.database.tables.integration_settings) {
+      const integrationRows = await pool.query(
+        `
+          SELECT provider, is_enabled, updated_at
+          FROM integration_settings
+          ORDER BY provider ASC
+        `
+      );
+      diagnostics.runtime.integrationSettings = integrationRows.rows.map((row) => ({
+        provider: String(row.provider || '').toLowerCase(),
+        isEnabled: row.is_enabled !== false,
+        updatedAt: row.updated_at || null,
+      }));
+    } else {
+      diagnostics.runtime.integrationSettings = [];
+    }
+
+    return res.json({
+      ok: diagnostics.database.missingTables.length === 0,
+      diagnostics,
+    });
+  } catch (error) {
+    console.error('Failed to build admin diagnostics:', error.message);
+    return res.status(500).json({
+      ok: false,
+      error: 'Failed to build diagnostics',
+      details: error.message,
+      diagnostics,
+    });
+  }
+});
+
 app.get('/api/admin/users', requireSuperAdmin, async (req, res) => {
   try {
     const usersRes = await pool.query(
@@ -3527,6 +3633,9 @@ app.put('/api/admin/connections/:provider', requireSuperAdmin, async (req, res) 
     return res.status(400).json({ error: 'Invalid connection provider' });
   }
 
+  const requestedTelegramMode = provider === 'telegram'
+    ? String(req.body?.config?.mode || '').trim().toLowerCase()
+    : '';
   const isEnabled = req.body?.isEnabled === true;
   const incomingConfig = sanitizeConnectionConfig(provider, req.body?.config);
 
@@ -3570,6 +3679,7 @@ app.put('/api/admin/connections/:provider', requireSuperAdmin, async (req, res) 
     const row = updated.rows[0];
     const runtimeRow = buildConnectionRuntimeRow(provider, row);
     applyConnectionRuntimeEnv(provider, runtimeRow);
+    const runtimeNotes = [];
     if (provider === 'stripe') {
       refreshStripeRuntimeFromEnv();
     } else if (provider === 'openai') {
@@ -3577,6 +3687,9 @@ app.put('/api/admin/connections/:provider', requireSuperAdmin, async (req, res) 
     } else if (provider === 'smtp') {
       refreshSmtpRuntimeFromEnv();
     } else if (provider === 'telegram') {
+      if (IS_SERVERLESS_RUNTIME && requestedTelegramMode === 'polling') {
+        runtimeNotes.push('Serverless runtime detected: Telegram mode was automatically set to webhook.');
+      }
       // Restart Telegram runtime in background so admin save API does not hang
       // when bot launch/polling takes too long.
       startTelegramRuntime({ restart: true }).catch((runtimeError) => {
@@ -3592,7 +3705,9 @@ app.put('/api/admin/connections/:provider', requireSuperAdmin, async (req, res) 
         config: row.config && typeof row.config === 'object' ? row.config : {},
         updatedAt: row.updated_at || null,
       },
-      note: 'Connection settings saved and applied.',
+      note: runtimeNotes.length
+        ? `Connection settings saved and applied. ${runtimeNotes.join(' ')}`
+        : 'Connection settings saved and applied.',
     });
   } catch (error) {
     console.error('Failed to update admin connection:', error);
@@ -7018,14 +7133,6 @@ const scheduleTelegramProfileSync = (userId, telegramId, from) => {
       client.release();
     }
   });
-};
-
-const normalizeWebhookPath = (pathValue) => {
-  const raw = String(pathValue || '/webhook').trim();
-  if (!raw) {
-    return '/webhook';
-  }
-  return raw.startsWith('/') ? raw : `/${raw}`;
 };
 
 const normalizeTelegramTopupCredits = (value) => {
@@ -12587,9 +12694,16 @@ const startTelegramRuntime = async ({ restart = false } = {}) => {
 
   await registerTelegramMenuCommands();
 
-  const mode = String(process.env.TELEGRAM_MODE || 'polling').toLowerCase();
+  const requestedMode = String(process.env.TELEGRAM_MODE || 'polling').toLowerCase();
+  const mode = requestedMode === 'webhook'
+    ? 'webhook'
+    : (IS_SERVERLESS_RUNTIME ? 'webhook' : 'polling');
+  if (mode !== requestedMode) {
+    process.env.TELEGRAM_MODE = mode;
+  }
   if (mode === 'webhook') {
     const webhookPath = normalizeWebhookPath(process.env.TELEGRAM_WEBHOOK_PATH || '/webhook');
+    process.env.TELEGRAM_WEBHOOK_PATH = webhookPath;
     ensureTelegramWebhookRoute(webhookPath);
 
     const publicServerUrl = String(process.env.PUBLIC_SERVER_URL || '').trim();
@@ -12604,6 +12718,11 @@ const startTelegramRuntime = async ({ restart = false } = {}) => {
     if (typeof telegramBot.startGenerationWorker === 'function') {
       telegramBot.startGenerationWorker();
     }
+    return;
+  }
+
+  if (IS_SERVERLESS_RUNTIME) {
+    console.warn('Skipping Telegram polling launch in serverless runtime. Configure webhook mode instead.');
     return;
   }
 
@@ -16013,7 +16132,7 @@ app.get('/api/telegram/payment/cancel', (req, res) => {
   return res.redirect(buildTelegramPaymentStatusRedirectUrl('cancel', { telegramId }));
 });
 
-app.post('/webhook/payment', async (req, res) => {
+const handlePaymentWebhook = async (req, res) => {
   try {
     const payload = req.body || {};
     const stripeSignature = req.headers['stripe-signature'];
@@ -16253,7 +16372,10 @@ app.post('/webhook/payment', async (req, res) => {
       details: error.message || 'Unknown error',
     });
   }
-});
+};
+
+app.post('/webhook/payment', handlePaymentWebhook);
+app.post('/api/webhook/payment', handlePaymentWebhook);
 
 if (HAS_STATIC_CLIENT) {
   app.get(/^\/(?!api(?:\/|$)).*/, (req, res) => {
