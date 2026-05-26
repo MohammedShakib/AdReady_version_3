@@ -204,7 +204,7 @@ const DEFAULT_ADMIN_USERNAME = process.env.DEFAULT_ADMIN_USERNAME || 'admin';
 const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'admin';
 const DEFAULT_SADMIN_USERNAME = process.env.DEFAULT_SADMIN_USERNAME || 'sadmin';
 const DEFAULT_SADMIN_PASSWORD = process.env.DEFAULT_SADMIN_PASSWORD || 'sadmin';
-const ALLOW_DEV_AUTH_BYPASS = String(process.env.ALLOW_DEV_AUTH_BYPASS || '').toLowerCase() === 'true';
+const ALLOW_DEV_AUTH_BYPASS = false;
 const DEV_AUTH_BYPASS_TOKEN = String(process.env.DEV_AUTH_BYPASS_TOKEN || 'dev-auth-bypass').trim();
 const DEV_AUTH_BYPASS_PASSWORD = String(process.env.DEV_AUTH_BYPASS_PASSWORD || 'admin').trim();
 const INTERNAL_API_KEY = String(process.env.INTERNAL_API_KEY || '').trim();
@@ -2416,12 +2416,28 @@ const ensureSuperAdminUser = async () => {
       [hash, existing.rows[0].id]
     );
     console.log(`Default Super DB admin password initialized: ${DEFAULT_SADMIN_USERNAME}`);
+  } else if (DEFAULT_SADMIN_PASSWORD) {
+    const passwordMatchesEnv = await bcrypt.compare(DEFAULT_SADMIN_PASSWORD, existing.rows[0].password_hash);
+    if (!passwordMatchesEnv) {
+      const hash = await bcrypt.hash(DEFAULT_SADMIN_PASSWORD, 10);
+      await pool.query(
+        `
+          UPDATE users
+          SET password_hash = $1
+          WHERE id = $2
+        `,
+        [hash, existing.rows[0].id]
+      );
+      console.log(`Default Super DB admin password synced from DEFAULT_SADMIN_PASSWORD: ${DEFAULT_SADMIN_USERNAME}`);
+    }
   }
 
   await pool.query(
     `
       UPDATE users
-      SET role = 'admin'
+      SET role = 'admin',
+          is_active = TRUE,
+          plan_status = 'active'
       WHERE id = $1
     `,
     [existing.rows[0].id]
@@ -2859,16 +2875,19 @@ app.post('/api/auth/login', async (req, res) => {
     );
 
     if (!userResult.rowCount) {
+      console.warn('Login rejected: user not found or inactive', { username });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = userResult.rows[0];
     if (!user.password_hash) {
+      console.warn('Login rejected: password hash missing', { username, userId: user.id });
       return res.status(401).json({ error: 'Password login is not set for this account' });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
+      console.warn('Login rejected: password mismatch', { username, userId: user.id });
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 

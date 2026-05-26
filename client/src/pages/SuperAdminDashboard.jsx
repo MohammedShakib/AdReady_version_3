@@ -30,7 +30,7 @@ import { apiUrl } from '../lib/api';
 
 const TAB_LIST = ['Users', 'Connections', 'API', 'API Log', 'Presets', 'Plans', 'Top Ups', 'Histroy'];
 const ADMIN_ACTIVE_TAB_STORAGE_KEY = 'superAdminActiveTab';
-const DEV_AUTH_BYPASS_ENABLED = String(import.meta.env.VITE_ALLOW_DEV_AUTH_BYPASS || '').toLowerCase() === 'true';
+const DEV_AUTH_BYPASS_ENABLED = false;
 const DEV_AUTH_BYPASS_LOGOUT_FLAG_KEY = 'devAuthBypassLoggedOut';
 const safeStorage = {
   get(key) {
