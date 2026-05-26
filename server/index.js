@@ -205,6 +205,7 @@ const DEFAULT_ADMIN_PASSWORD = process.env.DEFAULT_ADMIN_PASSWORD || 'admin';
 const DEFAULT_SADMIN_USERNAME = process.env.DEFAULT_SADMIN_USERNAME || 'sadmin';
 const DEFAULT_SADMIN_PASSWORD = process.env.DEFAULT_SADMIN_PASSWORD || 'sadmin';
 const ALLOW_DEV_AUTH_BYPASS = false;
+const AUTH_DEBUG_LOGIN = String(process.env.AUTH_DEBUG_LOGIN || 'true').toLowerCase() !== 'false';
 const DEV_AUTH_BYPASS_TOKEN = String(process.env.DEV_AUTH_BYPASS_TOKEN || 'dev-auth-bypass').trim();
 const DEV_AUTH_BYPASS_PASSWORD = String(process.env.DEV_AUTH_BYPASS_PASSWORD || 'admin').trim();
 const INTERNAL_API_KEY = String(process.env.INTERNAL_API_KEY || '').trim();
@@ -1564,6 +1565,27 @@ const signAuthToken = (userRow) =>
 
 const normalizeAuthUsername = (value) => String(value || '').trim().toLowerCase();
 
+const buildLoginDebugPayload = ({ traceId, reason, username, user = null, extra = {} }) => {
+  if (!AUTH_DEBUG_LOGIN) return undefined;
+  return {
+    traceId,
+    reason,
+    username,
+    normalizedUsername: normalizeAuthUsername(username),
+    defaultSuperAdminUsername: DEFAULT_SADMIN_USERNAME,
+    isDefaultSuperAdminUsername:
+      normalizeAuthUsername(username) === normalizeAuthUsername(DEFAULT_SADMIN_USERNAME),
+    defaultSuperAdminPasswordConfigured: Boolean(DEFAULT_SADMIN_PASSWORD),
+    authBypassEnabled: ALLOW_DEV_AUTH_BYPASS,
+    userFound: Boolean(user),
+    userId: user?.id ? String(user.id) : null,
+    userActive: user?.is_active === undefined ? null : user.is_active !== false,
+    userRole: user?.role || null,
+    hasPasswordHash: Boolean(user?.password_hash),
+    ...extra,
+  };
+};
+
 const ensureDevBypassSuperAdminUser = async () => {
   const existing = await pool.query(
     `
@@ -2837,11 +2859,26 @@ app.post('/api/auth/signup', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
+  const traceId = crypto.randomUUID();
   const username = String(req.body?.username || '').trim();
   const password = String(req.body?.password || '');
 
   if (!username || !password) {
-    return res.status(400).json({ error: 'Username and password are required' });
+    const debug = buildLoginDebugPayload({
+      traceId,
+      reason: 'missing_username_or_password',
+      username,
+      extra: {
+        hasUsername: Boolean(username),
+        hasPassword: Boolean(password),
+      },
+    });
+    console.warn('Login rejected: missing username or password', debug);
+    return res.status(400).json({
+      error: 'Username and password are required',
+      reason: 'missing_username_or_password',
+      ...(debug ? { debug } : {}),
+    });
   }
 
   const bypassAllowedUsername = normalizeAuthUsername(username) === normalizeAuthUsername(DEFAULT_SADMIN_USERNAME);
@@ -2868,27 +2905,51 @@ app.post('/api/auth/login', async (req, res) => {
         SELECT *
         FROM users
         WHERE username = $1
-          AND is_active = TRUE
         LIMIT 1
       `,
       [username]
     );
 
     if (!userResult.rowCount) {
-      console.warn('Login rejected: user not found or inactive', { username });
-      return res.status(401).json({ error: 'Invalid credentials' });
+      const debug = buildLoginDebugPayload({ traceId, reason: 'user_not_found', username });
+      console.warn('Login rejected: user not found', debug);
+      return res.status(401).json({
+        error: 'Invalid credentials',
+        reason: 'user_not_found',
+        ...(debug ? { debug } : {}),
+      });
     }
 
     const user = userResult.rows[0];
+    if (user.is_active === false) {
+      const debug = buildLoginDebugPayload({ traceId, reason: 'user_inactive', username, user });
+      console.warn('Login rejected: user inactive', debug);
+      return res.status(401).json({
+        error: 'User not found or inactive',
+        reason: 'user_inactive',
+        ...(debug ? { debug } : {}),
+      });
+    }
+
     if (!user.password_hash) {
-      console.warn('Login rejected: password hash missing', { username, userId: user.id });
-      return res.status(401).json({ error: 'Password login is not set for this account' });
+      const debug = buildLoginDebugPayload({ traceId, reason: 'password_hash_missing', username, user });
+      console.warn('Login rejected: password hash missing', debug);
+      return res.status(401).json({
+        error: 'Password login is not set for this account',
+        reason: 'password_hash_missing',
+        ...(debug ? { debug } : {}),
+      });
     }
 
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
-      console.warn('Login rejected: password mismatch', { username, userId: user.id });
-      return res.status(401).json({ error: 'Invalid credentials' });
+      const debug = buildLoginDebugPayload({ traceId, reason: 'password_mismatch', username, user });
+      console.warn('Login rejected: password mismatch', debug);
+      return res.status(401).json({
+        error: 'Invalid credentials',
+        reason: 'password_mismatch',
+        ...(debug ? { debug } : {}),
+      });
     }
 
     await pool.query(
@@ -2901,13 +2962,30 @@ app.post('/api/auth/login', async (req, res) => {
     );
 
     const token = signAuthToken(user);
+    const successDebug = buildLoginDebugPayload({ traceId, reason: 'login_success', username, user });
+    console.log('Login accepted', successDebug || { traceId, username });
     return res.json({
       token,
       user: buildAuthUserPayload(user),
+      ...(successDebug ? { debug: successDebug } : {}),
     });
   } catch (error) {
-    console.error('Login failed:', error.message);
-    return res.status(500).json({ error: 'Login failed', details: error.message });
+    const debug = buildLoginDebugPayload({
+      traceId,
+      reason: 'login_exception',
+      username,
+      extra: {
+        message: error.message,
+        code: error.code || null,
+      },
+    });
+    console.error('Login failed:', debug);
+    return res.status(500).json({
+      error: 'Login failed',
+      details: error.message,
+      reason: 'login_exception',
+      ...(debug ? { debug } : {}),
+    });
   }
 });
 

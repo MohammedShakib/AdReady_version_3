@@ -98,6 +98,7 @@ export default function Login() {
 
     try {
       const endpoint = isSignup ? '/api/auth/signup' : '/api/auth/login';
+      const requestStartedAt = Date.now();
       const response = await fetch(apiUrl(endpoint), {
         method: 'POST',
         headers: {
@@ -110,9 +111,37 @@ export default function Login() {
         }),
       });
 
-      const data = await response.json().catch(() => ({}));
+      const rawText = await response.text();
+      let data = {};
+      try {
+        data = rawText ? JSON.parse(rawText) : {};
+      } catch {
+        data = {};
+      }
+      const authDebug = {
+        endpoint,
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        durationMs: Date.now() - requestStartedAt,
+        reason: data?.reason || null,
+        traceId: data?.debug?.traceId || null,
+        debug: data?.debug || null,
+        response: data,
+        rawResponsePreview: rawText ? rawText.slice(0, 500) : '',
+      };
+      if (response.ok) {
+        console.info('[Auth Login Debug]', authDebug);
+      } else {
+        console.error('[Auth Login Debug]', authDebug);
+      }
       if (!response.ok) {
-        throw new Error(data?.error || data?.details || (isSignup ? 'Signup failed' : 'Login failed'));
+        const debugSuffix = data?.reason ? ` (${data.reason})` : '';
+        throw new Error(
+          data?.details ||
+          data?.error ||
+          `${isSignup ? 'Signup failed' : 'Login failed'}${debugSuffix}`
+        );
       }
       if (!data?.token || !data?.user) {
         throw new Error(
