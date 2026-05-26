@@ -6,6 +6,35 @@ import { apiUrl } from '../lib/api';
 const DEV_AUTH_BYPASS_ENABLED = String(import.meta.env.VITE_ALLOW_DEV_AUTH_BYPASS || '').toLowerCase() === 'true';
 const DEV_AUTH_BYPASS_TOKEN = String(import.meta.env.VITE_DEV_AUTH_BYPASS_TOKEN || 'dev-auth-bypass').trim();
 const DEV_AUTH_BYPASS_USERNAME = String(import.meta.env.VITE_DEV_AUTH_BYPASS_USERNAME || 'sadmin').trim();
+const DEV_AUTH_BYPASS_LOGOUT_FLAG_KEY = 'devAuthBypassLoggedOut';
+const safeStorage = {
+  get(key) {
+    try {
+      if (typeof window === 'undefined') return null;
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      if (typeof window === 'undefined') return false;
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  remove(key) {
+    try {
+      if (typeof window === 'undefined') return false;
+      window.localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
 
 export default function Login() {
   const [authMode, setAuthMode] = useState('signin');
@@ -21,18 +50,20 @@ export default function Login() {
   const confirmPasswordInputRef = useRef(null);
   const navigate = useNavigate();
   const isSignup = authMode === 'signup';
+  const bypassPausedByLogout = DEV_AUTH_BYPASS_ENABLED && safeStorage.get(DEV_AUTH_BYPASS_LOGOUT_FLAG_KEY) === 'true';
 
   useEffect(() => {
     if (!DEV_AUTH_BYPASS_ENABLED) return;
-    localStorage.setItem('authToken', DEV_AUTH_BYPASS_TOKEN);
-    localStorage.setItem('username', DEV_AUTH_BYPASS_USERNAME);
-    localStorage.setItem('userId', 'dev-bypass');
-    localStorage.setItem('userRole', 'admin');
-    localStorage.setItem('isSuperAdmin', 'true');
+    if (bypassPausedByLogout) return;
+    safeStorage.set('authToken', DEV_AUTH_BYPASS_TOKEN);
+    safeStorage.set('username', DEV_AUTH_BYPASS_USERNAME);
+    safeStorage.set('userId', 'dev-bypass');
+    safeStorage.set('userRole', 'admin');
+    safeStorage.set('isSuperAdmin', 'true');
     navigate('/admin', { replace: true });
-  }, [navigate]);
+  }, [navigate, bypassPausedByLogout]);
 
-  if (DEV_AUTH_BYPASS_ENABLED) {
+  if (DEV_AUTH_BYPASS_ENABLED && !bypassPausedByLogout) {
     return null;
   }
 
@@ -89,15 +120,16 @@ export default function Login() {
         );
       }
 
-      localStorage.setItem('authToken', data?.token || '');
-      localStorage.setItem('username', data?.user?.username || cleanUsername);
-      localStorage.setItem('userId', data?.user?.id || '');
-      localStorage.setItem('userRole', data?.user?.role || 'member');
+      safeStorage.set('authToken', data?.token || '');
+      safeStorage.set('username', data?.user?.username || cleanUsername);
+      safeStorage.set('userId', data?.user?.id || '');
+      safeStorage.set('userRole', data?.user?.role || 'member');
       const isSuperAdmin = Boolean(
         data?.user?.isSuperAdmin ||
         String(data?.user?.username || cleanUsername).toLowerCase() === 'sadmin'
       );
-      localStorage.setItem('isSuperAdmin', isSuperAdmin ? 'true' : 'false');
+      safeStorage.set('isSuperAdmin', isSuperAdmin ? 'true' : 'false');
+      safeStorage.remove(DEV_AUTH_BYPASS_LOGOUT_FLAG_KEY);
 
       if (isSuperAdmin) {
         navigate('/admin', { replace: true });

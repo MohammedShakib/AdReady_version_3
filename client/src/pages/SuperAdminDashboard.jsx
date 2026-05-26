@@ -30,6 +30,36 @@ import { apiUrl } from '../lib/api';
 
 const TAB_LIST = ['Users', 'Connections', 'API', 'API Log', 'Presets', 'Plans', 'Top Ups', 'Histroy'];
 const ADMIN_ACTIVE_TAB_STORAGE_KEY = 'superAdminActiveTab';
+const DEV_AUTH_BYPASS_ENABLED = String(import.meta.env.VITE_ALLOW_DEV_AUTH_BYPASS || '').toLowerCase() === 'true';
+const DEV_AUTH_BYPASS_LOGOUT_FLAG_KEY = 'devAuthBypassLoggedOut';
+const safeStorage = {
+  get(key) {
+    try {
+      if (typeof window === 'undefined') return null;
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      if (typeof window === 'undefined') return false;
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  remove(key) {
+    try {
+      if (typeof window === 'undefined') return false;
+      window.localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
 const PLAN_TIERS = ['free', 'basic', 'pro'];
 const PLAN_OPTIONS = PLAN_TIERS.map((tier) => ({ value: tier, label: tier[0].toUpperCase() + tier.slice(1) }));
 const ROLE_OPTIONS = [
@@ -330,7 +360,7 @@ const getPlanLimitsForDisplay = (tier, monthlyCredits) => {
 
 const getInitialAdminTab = () => {
   if (typeof window === 'undefined') return 'Users';
-  const savedTab = String(localStorage.getItem(ADMIN_ACTIVE_TAB_STORAGE_KEY) || '');
+  const savedTab = String(safeStorage.get(ADMIN_ACTIVE_TAB_STORAGE_KEY) || '');
   return TAB_LIST.includes(savedTab) ? savedTab : 'Users';
 };
 
@@ -348,7 +378,7 @@ export default function SuperAdminDashboard() {
   const navigate = useNavigate();
   const [theme, setTheme] = useState(() => {
     if (typeof window === 'undefined') return 'dark';
-    return localStorage.getItem('superAdminTheme') || 'dark';
+    return safeStorage.get('superAdminTheme') || 'dark';
   });
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
@@ -420,17 +450,17 @@ export default function SuperAdminDashboard() {
   const [deleteProjectDialog, setDeleteProjectDialog] = useState(null);
   const [userForm, setUserForm] = useState(buildDefaultForm());
 
-  const authToken = localStorage.getItem('authToken') || '';
+  const authToken = safeStorage.get('authToken') || '';
   const isDark = theme === 'dark';
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem('superAdminTheme', theme);
+    safeStorage.set('superAdminTheme', theme);
   }, [theme]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    localStorage.setItem(ADMIN_ACTIVE_TAB_STORAGE_KEY, activeTab);
+    safeStorage.set(ADMIN_ACTIVE_TAB_STORAGE_KEY, activeTab);
   }, [activeTab]);
 
   const clearBanner = useCallback(() => setBanner({ type: '', text: '' }), []);
@@ -457,11 +487,11 @@ export default function SuperAdminDashboard() {
       }
       if (!response.ok) {
         if (response.status === 401 || response.status === 403) {
-          localStorage.removeItem('authToken');
-          localStorage.removeItem('username');
-          localStorage.removeItem('userId');
-          localStorage.removeItem('userRole');
-          localStorage.removeItem('isSuperAdmin');
+          safeStorage.remove('authToken');
+          safeStorage.remove('username');
+          safeStorage.remove('userId');
+          safeStorage.remove('userRole');
+          safeStorage.remove('isSuperAdmin');
           navigate('/login', { replace: true });
         }
         const statusText = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
@@ -1176,11 +1206,14 @@ export default function SuperAdminDashboard() {
   }, [apiLogs]);
 
   const handleLogout = () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('username');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('isSuperAdmin');
+    safeStorage.remove('authToken');
+    safeStorage.remove('username');
+    safeStorage.remove('userId');
+    safeStorage.remove('userRole');
+    safeStorage.remove('isSuperAdmin');
+    if (DEV_AUTH_BYPASS_ENABLED) {
+      safeStorage.set(DEV_AUTH_BYPASS_LOGOUT_FLAG_KEY, 'true');
+    }
     navigate('/login', { replace: true });
   };
 

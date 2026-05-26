@@ -9,23 +9,56 @@ import './App.css';
 const DEV_AUTH_BYPASS_ENABLED = String(import.meta.env.VITE_ALLOW_DEV_AUTH_BYPASS || '').toLowerCase() === 'true';
 const DEV_AUTH_BYPASS_TOKEN = String(import.meta.env.VITE_DEV_AUTH_BYPASS_TOKEN || 'dev-auth-bypass').trim();
 const DEV_AUTH_BYPASS_USERNAME = String(import.meta.env.VITE_DEV_AUTH_BYPASS_USERNAME || 'sadmin').trim();
+const DEV_AUTH_BYPASS_LOGOUT_FLAG_KEY = 'devAuthBypassLoggedOut';
+const safeStorage = {
+  get(key) {
+    try {
+      if (typeof window === 'undefined') return null;
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      if (typeof window === 'undefined') return false;
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  remove(key) {
+    try {
+      if (typeof window === 'undefined') return false;
+      window.localStorage.removeItem(key);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+};
 
 const isSuperAdminSession = () => {
-  const marker = localStorage.getItem('isSuperAdmin');
+  if (typeof window === 'undefined') return false;
+  const marker = safeStorage.get('isSuperAdmin');
   if (marker === 'true') return true;
   if (marker === 'false') return false;
-  const username = String(localStorage.getItem('username') || '').toLowerCase();
+  const username = String(safeStorage.get('username') || '').toLowerCase();
   return username === 'sadmin';
 };
 
 const DevAuthBootstrap = () => {
   useEffect(() => {
     if (!DEV_AUTH_BYPASS_ENABLED) return;
-    localStorage.setItem('authToken', DEV_AUTH_BYPASS_TOKEN);
-    localStorage.setItem('username', DEV_AUTH_BYPASS_USERNAME);
-    localStorage.setItem('userId', 'dev-bypass');
-    localStorage.setItem('userRole', 'admin');
-    localStorage.setItem('isSuperAdmin', 'true');
+    if (typeof window === 'undefined') return;
+    const wasManuallyLoggedOut = safeStorage.get(DEV_AUTH_BYPASS_LOGOUT_FLAG_KEY) === 'true';
+    if (wasManuallyLoggedOut) return;
+    safeStorage.set('authToken', DEV_AUTH_BYPASS_TOKEN);
+    safeStorage.set('username', DEV_AUTH_BYPASS_USERNAME);
+    safeStorage.set('userId', 'dev-bypass');
+    safeStorage.set('userRole', 'admin');
+    safeStorage.set('isSuperAdmin', 'true');
   }, []);
 
   return null;
@@ -33,13 +66,13 @@ const DevAuthBootstrap = () => {
 
 // Simple PrivateRoute wrapper
 const PrivateRoute = ({ children }) => {
-  const authToken = localStorage.getItem('authToken');
+  const authToken = typeof window === 'undefined' ? '' : safeStorage.get('authToken');
   const isAuthenticated = Boolean(authToken);
   return isAuthenticated ? children : <Navigate to="/login" replace />;
 };
 
 const DashboardRoute = () => {
-  const authToken = localStorage.getItem('authToken');
+  const authToken = typeof window === 'undefined' ? '' : safeStorage.get('authToken');
   const isAuthenticated = Boolean(authToken);
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   if (isSuperAdminSession()) return <Navigate to="/admin" replace />;
@@ -48,7 +81,7 @@ const DashboardRoute = () => {
 
 // AdminRoute wrapper
 const AdminRoute = ({ children }) => {
-  const authToken = localStorage.getItem('authToken');
+  const authToken = typeof window === 'undefined' ? '' : safeStorage.get('authToken');
   const isAuthenticated = Boolean(authToken);
   const isAdmin = isSuperAdminSession();
   
@@ -63,14 +96,8 @@ function App() {
     <Router>
       <DevAuthBootstrap />
       <Routes>
-        <Route
-          path="/"
-          element={DEV_AUTH_BYPASS_ENABLED ? <Navigate to="/admin" replace /> : <LandingPage />}
-        />
-        <Route
-          path="/login"
-          element={DEV_AUTH_BYPASS_ENABLED ? <Navigate to="/admin" replace /> : <Login />}
-        />
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<Login />} />
         <Route 
           path="/dashboard" 
           element={
