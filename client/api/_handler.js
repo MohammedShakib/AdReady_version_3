@@ -16,7 +16,9 @@ const ensureInit = () => {
 const normalizeIncomingApiPath = (req) => {
   try {
     const requestUrl = new URL(req.url || '/', 'https://adready.local');
-    const proxiedPath = requestUrl.searchParams.get('__path');
+    const proxiedPath =
+      requestUrl.searchParams.get('__path') ||
+      requestUrl.searchParams.get('path');
     if (proxiedPath && proxiedPath.startsWith('/api/')) {
       req.url = proxiedPath;
       return proxiedPath.split('?')[0];
